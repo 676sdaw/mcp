@@ -27,290 +27,6 @@ from src.utils.logger import app_logger
 # 创建FastMCP实例
 mcp = FastMCP("AI智能助手")
 
-# 创建GitHub客户端实例
-github_client = GitHubClient()
-
-
-# ============ GitHub工具函数定义 ============
-
-async def search_github_repositories_impl(query: str, language: Optional[str] = None,
-                                          sort: str = "stars", limit: int = 8) -> str:
-    """搜索GitHub仓库工具
-
-    用户只需要传入搜索关键词和筛选条件即可搜索GitHub仓库。
-
-    Args:
-        query: 搜索关键词（英文效果更好），如 'python web framework', 'machine learning'
-        language: 可选的编程语言筛选，如 python, javascript, java 等
-        sort: 排序方式，默认stars（按星数），也可以是forks、updated
-        limit: 返回结果数量，默认8个，范围1-20
-
-    Returns:
-        格式化的GitHub仓库搜索结果
-    """
-    try:
-        # 输入验证
-        if not query or not query.strip():
-            return "❌ 搜索关键词不能为空"
-
-        query = query.strip()
-        if len(query) > 256:
-            return "❌ 搜索关键词过长，请限制在256字符以内"
-
-        app_logger.info(f"🔍 搜索GitHub仓库: {query}")
-
-        # 直接使用await处理异步GitHub API调用
-        repositories = await github_client.search_repositories(
-            query=query,
-            language=language,
-            sort=sort,
-            per_page=limit
-        )
-
-        if not repositories:
-            return f"❌ 未找到与 '{query}' 匹配的仓库"
-
-        # 格式化搜索结果
-        result_lines = [f"🔍 找到 {len(repositories)} 个相关仓库:\n"]
-
-        for i, repo in enumerate(repositories, 1):
-            stars = repo.get('stargazers_count', 0)
-            forks = repo.get('forks_count', 0)
-            lang = repo.get('language', '未知')
-            desc = repo.get('description', '无描述')
-
-            result_lines.append(
-                f"**{i}. {repo['full_name']}** ⭐ {stars:,}\n"
-                f"   📝 {desc}\n"
-                f"   💻 {lang} | 🍴 {forks:,} forks\n"
-                f"   🔗 {repo.get('html_url', '')}\n"
-            )
-
-        return "\n".join(result_lines)
-
-    except Exception as e:
-        app_logger.error(f"❌ 搜索仓库失败: {str(e)}")
-        return f"❌ 搜索失败: {str(e)}"
-
-
-async def get_repository_details_impl(owner: str, repo: str) -> str:
-    """获取仓库详细信息工具
-
-    获取指定GitHub仓库的完整详细信息。
-
-    Args:
-        owner: 仓库所有者用户名或组织名
-        repo: 仓库名称
-
-    Returns:
-        仓库的详细信息
-    """
-    try:
-        # 输入验证
-        if not owner or not owner.strip():
-            return "❌ 仓库所有者不能为空"
-        if not repo or not repo.strip():
-            return "❌ 仓库名称不能为空"
-
-        owner = owner.strip()
-        repo = repo.strip()
-
-        # GitHub用户名和仓库名的基本限制
-        if len(owner) > 39 or len(repo) > 100:
-            return "❌ 用户名或仓库名过长"
-
-        app_logger.info(f"📦 获取仓库详情: {owner}/{repo}")
-
-        # 直接使用await处理异步GitHub API调用
-        repo_info = await github_client.get_repository_info(owner, repo)
-
-        # 格式化仓库信息
-        return f"""📦 **{repo_info['full_name']}**
-
-📝 **描述**: {repo_info.get('description', '无描述')}
-⭐ **星标**: {repo_info.get('stargazers_count', 0):,}
-🍴 **分叉**: {repo_info.get('forks_count', 0):,}
-👀 **关注者**: {repo_info.get('watchers_count', 0):,}
-🐛 **开放议题**: {repo_info.get('open_issues_count', 0):,}
-💻 **主要语言**: {repo_info.get('language', '未知')}
-📦 **大小**: {repo_info.get('size', 0):,} KB
-📅 **创建时间**: {repo_info.get('created_at', '未知')[:10]}
-📅 **最后更新**: {repo_info.get('updated_at', '未知')[:10]}
-🔗 **仓库链接**: {repo_info.get('html_url', '')}
-
-📄 **开源许可**: {repo_info.get('license', {}).get('name', '无许可证') if repo_info.get('license') else '无许可证'}
-🏠 **项目主页**: {repo_info.get('homepage') or '无'}
-🔄 **默认分支**: {repo_info.get('default_branch', 'main')}"""
-
-    except Exception as e:
-        app_logger.error(f"❌ 获取仓库详情失败: {str(e)}")
-        return f"❌ 获取仓库 {owner}/{repo} 的详情失败: {str(e)}"
-
-
-async def search_github_users_impl(query: str, user_type: Optional[str] = None) -> str:
-    """搜索GitHub用户工具
-
-    搜索GitHub平台上的用户和组织账号。
-
-    Args:
-        query: 用户名或组织名搜索关键词
-        user_type: 账号类型筛选，可选值：user（个人用户）、org（组织）
-
-    Returns:
-        匹配的用户列表
-    """
-    try:
-        # 输入验证
-        if not query or not query.strip():
-            return "❌ 用户名搜索关键词不能为空"
-
-        query = query.strip()
-        if len(query) > 256:
-            return "❌ 搜索关键词过长，请限制在256字符以内"
-
-        app_logger.info(f"👤 搜索GitHub用户: {query}")
-
-        # 如果查询看起来像完整的用户名，先尝试直接获取用户信息
-        if query and not ' ' in query and len(query) <= 39:  # GitHub用户名最大长度39
-            try:
-                app_logger.info(f"尝试直接获取用户 {query} 的详细信息")
-                direct_user = await github_client.get_user_info(query)
-
-                # 如果指定了用户类型且不匹配，则进行搜索
-                if user_type and direct_user.get('type', '').lower() != user_type:
-                    raise Exception("用户类型不匹配，进行搜索")
-
-                # 格式化单个用户的详细信息
-                user_emoji = "👤" if direct_user.get('type') == 'User' else "🏢"
-
-                result = f"我找到了用户 **{direct_user['login']}** 的信息:\n\n"
-                result += f"- **GitHub主页**: {direct_user.get('html_url', '')}\n"
-                result += f"- **公开仓库数量**: {direct_user.get('public_repos', 0)}\n"
-                result += f"- **关注者数量**: {direct_user.get('followers', 0)}\n"
-
-                if direct_user.get('name'):
-                    result += f"- **真实姓名**: {direct_user['name']}\n"
-                if direct_user.get('bio'):
-                    result += f"- **个人简介**: {direct_user['bio']}\n"
-                if direct_user.get('location'):
-                    result += f"- **位置**: {direct_user['location']}\n"
-                if direct_user.get('company'):
-                    result += f"- **公司**: {direct_user['company']}\n"
-
-                result += f"\n目前该用户有 **{direct_user.get('public_repos', 0)}** 个公开的仓库。"
-
-                return result
-
-            except Exception as e:
-                app_logger.info(f"直接获取用户失败，转为搜索模式: {str(e)}")
-
-        # 使用搜索API查找用户
-        users = await github_client.search_users(query=query, type=user_type)
-
-        if not users:
-            return f"❌ 未找到与 '{query}' 匹配的用户"
-
-        # 格式化搜索结果
-        result_lines = [f"👥 找到 {len(users)} 个相关用户:\n"]
-
-        for i, user in enumerate(users, 1):
-            user_emoji = "👤" if user.get('type') == 'User' else "🏢"
-
-            result_lines.append(
-                f"**{i}. {user_emoji} {user['login']}**\n"
-                f"   🔗 {user.get('html_url', '')}\n"
-                f"   📊 公开仓库: {user.get('public_repos', 0)}\n"
-                f"   👥 关注者: {user.get('followers', 0)}\n"
-            )
-
-        return "\n".join(result_lines)
-
-    except Exception as e:
-        app_logger.error(f"❌ 搜索用户失败: {str(e)}")
-        return f"❌ 搜索用户失败: {str(e)}"
-
-
-async def get_trending_repositories_impl(language: Optional[str] = None, period: str = "daily") -> str:
-    """获取GitHub热门趋势仓库工具
-
-    获取当前GitHub上的热门趋势项目。
-
-    Args:
-        language: 可选的编程语言筛选，如 python, javascript, go 等
-        period: 趋势时间范围，默认daily（每日），也可以是weekly（每周）、monthly（每月）
-
-    Returns:
-        热门趋势仓库列表
-    """
-    try:
-        # 输入验证
-        if language and len(language.strip()) > 50:
-            return "❌ 编程语言名称过长"
-
-        if period not in ["daily", "weekly", "monthly"]:
-            return "❌ 时间周期只能是 daily、weekly 或 monthly"
-
-        app_logger.info(f"🔥 获取热门仓库: language={language}, period={period}")
-
-        # 根据时间范围构造更合理的趋势查询
-        import datetime
-
-        # 构造查询：获取最近一段时间内有一定活跃度的高星仓库
-        if period == "daily":
-            # 今日趋势：最近7天更新过且星数较高的仓库
-            date_filter = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%Y-%m-%d')
-            query = f"pushed:>{date_filter} stars:>50"
-            period_desc = "最近7天活跃"
-        elif period == "weekly":
-            # 周趋势：最近30天创建或更新的高星仓库
-            date_filter = (datetime.datetime.now() - datetime.timedelta(days=30)).strftime('%Y-%m-%d')
-            query = f"created:>{date_filter} stars:>10"
-            period_desc = "最近30天"
-        else:  # monthly
-            # 月趋势：最近90天创建的热门仓库
-            date_filter = (datetime.datetime.now() - datetime.timedelta(days=90)).strftime('%Y-%m-%d')
-            query = f"created:>{date_filter} stars:>5"
-            period_desc = "最近90天"
-
-        app_logger.info(f"趋势查询: {query}")
-
-        # 调用搜索仓库功能
-        repositories = await github_client.search_repositories(
-            query=query,
-            language=language,
-            sort="stars",
-            order="desc",
-            per_page=10
-        )
-
-        if not repositories:
-            return f"❌ 未找到 {language or '所有语言'} 的{period_desc}热门仓库"
-
-        # 格式化趋势仓库结果
-        result_lines = [f"🔥 找到 {len(repositories)} 个{language or '全部语言'}{period_desc}热门仓库:\n"]
-
-        for i, repo in enumerate(repositories, 1):
-            stars = repo.get('stargazers_count', 0)
-            forks = repo.get('forks_count', 0)
-            lang = repo.get('language', '未知')
-            desc = repo.get('description', '无描述')
-            created = repo.get('created_at', '')[:10] if repo.get('created_at') else '未知'
-            updated = repo.get('updated_at', '')[:10] if repo.get('updated_at') else '未知'
-
-            result_lines.append(
-                f"**{i}. {repo['full_name']}** ⭐ {stars:,}\n"
-                f"   📝 {desc}\n"
-                f"   💻 {lang} | 🍴 {forks:,} forks\n"
-                f"   📅 创建: {created} | 更新: {updated}\n"
-                f"   🔗 {repo.get('html_url', '')}\n"
-            )
-
-        return "\n".join(result_lines)
-
-    except Exception as e:
-        app_logger.error(f"❌ 获取热门仓库失败: {str(e)}")
-        return f"❌ 获取热门仓库失败: {str(e)}"
-
 
 class CarlaClient:
     """CARLA客户端封装类"""
@@ -340,6 +56,7 @@ class CarlaClient:
             vehicle = self.world.spawn_actor(blueprint, spawn_point)
             self.actors.append(vehicle)
             app_logger.info(f"🚗 生成车辆: {vehicle_type}")
+
             return vehicle
         except Exception as e:
             app_logger.error(f"❌ 生成车辆失败: {str(e)}")
@@ -392,10 +109,43 @@ class CarlaClient:
             pedestrian = self.world.spawn_actor(blueprint, spawn_point)
             self.actors.append(pedestrian)
             app_logger.info(f"🚶 生成行人: {pedestrian_type}")
+            
+            # 将视角对准生成的行人
+            self.set_spectator_view(pedestrian)
             return pedestrian
         except Exception as e:
             app_logger.error(f"❌ 生成行人失败: {str(e)}")
             return None
+
+    def set_spectator_view(self, target_actor):
+        """将视角对准目标actor"""
+        try:
+            spectator = self.world.get_spectator()
+            target_transform = target_actor.get_transform()
+            
+            # 设置相机位置在目标actor前方5米，上方2米处
+            # 这样可以从正面看到行人
+            camera_location = carla.Location(
+                x=target_transform.location.x + 5.0,  # 前方5米
+                y=target_transform.location.y,
+                z=target_transform.location.z + 2.0
+            )
+            
+            # 计算相机朝向，指向行人
+            # yaw=180.0 让相机朝向行人方向
+            camera_rotation = carla.Rotation(
+                pitch=-15.0,  # 略微向下看
+                yaw=180.0,    # 朝向行人
+                roll=0.0
+            )
+            
+            camera_transform = carla.Transform(camera_location, camera_rotation)
+            spectator.set_transform(camera_transform)
+            app_logger.info(f"👁️  视角已对准actor {target_actor.id}")
+            return True
+        except Exception as e:
+            app_logger.error(f"❌ 设置视角失败: {str(e)}")
+            return False
 
     async def cleanup(self):
         """清理环境"""
@@ -495,30 +245,6 @@ async def spawn_pedestrian(query: str, user_type: Optional[str] = None) -> str:
     return await spawn_pedestrian_impl(query)
 
 
-@mcp.tool()
-async def search_github_repositories(query: str, language: Optional[str] = None,
-                                     sort: str = "stars", limit: int = 8) -> str:
-    """搜索GitHub仓库工具 - FastMCP版本"""
-    return await search_github_repositories_impl(query, language, sort, limit)
-
-
-@mcp.tool()
-async def get_repository_details(owner: str, repo: str) -> str:
-    """获取仓库详细信息工具 - FastMCP版本"""
-    return await get_repository_details_impl(owner, repo)
-
-
-@mcp.tool()
-async def search_github_users(query: str, user_type: Optional[str] = None) -> str:
-    """搜索GitHub用户工具 - FastMCP版本"""
-    return await search_github_users_impl(query, user_type)
-
-
-@mcp.tool()
-async def get_trending_repositories(language: Optional[str] = None, period: str = "daily") -> str:
-    """获取GitHub热门趋势仓库工具 - FastMCP版本"""
-    return await get_trending_repositories_impl(language, period)
-
 
 # ============ AI助手类（集成Deepseek AI） ============
 
@@ -611,103 +337,6 @@ class FastMCPGitHubAssistant:
                     }
                 }
             },
-            {
-                "type": "function",
-                "function": {
-                    "name": "search_github_repositories",
-                    "description": "搜索GitHub仓库工具。根据关键词、编程语言等条件搜索GitHub仓库，返回热门匹配结果。",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "搜索关键词（建议使用英文），如 'python web framework', 'machine learning', 'face detection'"
-                            },
-                            "language": {
-                                "type": "string",
-                                "description": "可选的编程语言筛选，如 python, javascript, java 等"
-                            },
-                            "sort": {
-                                "type": "string",
-                                "enum": ["stars", "forks", "updated"],
-                                "description": "排序方式，默认stars（按星数），也可以是forks、updated"
-                            },
-                            "limit": {
-                                "type": "integer",
-                                "description": "返回结果数量，默认8个，范围1-20",
-                                "minimum": 1,
-                                "maximum": 20
-                            }
-                        },
-                        "required": ["query"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_repository_details",
-                    "description": "获取指定GitHub仓库的完整详细信息，包括统计数据、描述、许可证等。",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "owner": {
-                                "type": "string",
-                                "description": "仓库所有者用户名或组织名"
-                            },
-                            "repo": {
-                                "type": "string",
-                                "description": "仓库名称"
-                            }
-                        },
-                        "required": ["owner", "repo"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "search_github_users",
-                    "description": "搜索GitHub平台上的用户和组织账号。",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "用户名或组织名搜索关键词"
-                            },
-                            "user_type": {
-                                "type": "string",
-                                "enum": ["user", "org"],
-                                "description": "账号类型筛选，可选值：user（个人用户）、org（组织）"
-                            }
-                        },
-                        "required": ["query"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_trending_repositories",
-                    "description": "获取当前GitHub上的热门趋势项目。",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "language": {
-                                "type": "string",
-                                "description": "可选的编程语言筛选，如 python, javascript, go 等"
-                            },
-                            "period": {
-                                "type": "string",
-                                "enum": ["daily", "weekly", "monthly"],
-                                "description": "趋势时间范围，默认daily（每日），也可以是weekly（每周）、monthly（每月）"
-                            }
-                        },
-                        "required": []
-                    }
-                }
-            }
         ]
 
     def process_markdown(self, text):
@@ -889,11 +518,6 @@ class FastMCPGitHubAssistant:
                 "role": "system",
                 "content": """你是一个GitHub搜索助手，基于FastMCP框架提供服务。你有以下工具可以使用：
 
-GitHub功能：
-1. search_github_repositories - 搜索GitHub仓库
-2. get_repository_details - 获取仓库详细信息（需要用户名和仓库名）
-3. search_github_users - 搜索GitHub用户和组织
-4. get_trending_repositories - 获取热门趋势仓库
 
 CARLA仿真功能：
 5. connect_carla - 连接CARLA服务器（默认localhost:2000）
@@ -903,12 +527,6 @@ CARLA仿真功能：
 9. get_traffic_lights - 查看交通灯状态
 10. cleanup_scene - 清理仿真场景
 
-处理用户查询的策略：
-GitHub相关：
-- 如果用户询问特定用户的特定项目，优先使用get_repository_details工具
-- 如果用户询问某类项目的推荐，使用search_github_repositories
-- 如果用户询问某个用户的信息，使用search_github_users
-- 如果用户询问热门或趋势项目，使用get_trending_repositories
 
 CARLA相关：
 - 如果用户提到"车辆"、"生成"、"创建汽车"等，使用spawn_vehicle
@@ -1438,12 +1056,6 @@ def get_web_interface():
                         </div>
                         <h3>💡 试试这些问题：</h3>
                         <div class="examples-grid">
-                            <div class="example-item" onclick="askExample('查看最近热门的项目')">
-                                🔥 查看近期热门项目
-                            </div>
-                            <div class="example-item" onclick="askExample('找一些机器学习库')">
-                                🤖 查找机器学习库
-                            </div>
                             <div class="example-item" onclick="askExample('连接CARLA仿真服务器')">
                             🔗 连接服务器
                             </div>
