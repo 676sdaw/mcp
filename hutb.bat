@@ -8,11 +8,52 @@ set "PROJECT_ROOT=%~dp0"
 set "PROJECT_ROOT=%PROJECT_ROOT:~0,-1%"
 
 REM Set virtual environment and Python paths
-set "VENV_PATH=%PROJECT_ROOT%\env.UE4-hutb"
+set "VENV_PATH=%PROJECT_ROOT%\dependencies\prerequisites\miniconda3\envs\hutb_3.10"
 set "PYTHON_EXE=%VENV_PATH%\python.exe"
 
+if not exist "%PROJECT_ROOT%\hutb_downloader.exe" (
+    curl -L -o "hutb_downloader.exe" "https://gitee.com/OpenHUTB/sw/releases/download/up/hutb_downloader.exe"
+) else (
+    echo hutb_downloader.exe already exists.
+)
+
+REM 如果 dependencies 目录不存在，则下载
+if not exist "%PROJECT_ROOT%\dependencies" (
+    echo dependencies directory not found. Downloading...
+    start /wait "" "%PROJECT_ROOT%\hutb_downloader.exe" --repository dependencies
+    echo Download and extraction dependencies completed.
+) else (
+    echo dependencies repository already exists.
+)
+
+REM 如果 hutb 目录不存在，则下载
+if not exist "%PROJECT_ROOT%\hutb" (
+    echo hutb directory not found. Downloading...
+
+    REM 调用 hutb_downloader.exe，等待执行完成
+    start /wait "" "%PROJECT_ROOT%\hutb_downloader.exe"
+    echo Download and extraction completed.
+) else (
+    echo hutb repository already exists.
+)
+
+REM 为了解压miniconda3
+if not exist "dependencies\prerequisites\7zip" (
+    echo Unzipping 7zip ...
+    powershell -Command "Expand-Archive -Path 'dependencies\prerequisites\7zip.zip' -DestinationPath 'dependencies\prerequisites\' -Force" || exit /b
+) else (
+    echo 7zip folder already exists.
+)
+if not exist "dependencies\prerequisites\miniconda3\" (
+    echo Unzipping miniconda...
+    "dependencies\prerequisites\7zip\7z.exe" x "dependencies\prerequisites\miniconda3.zip" -o"dependencies\prerequisites\" -y >nul
+) else (
+    echo miniconda3 folder already exists.
+)
+
+
 REM Set CarlaUE4.exe path
-set "CARLA_EXE=%PROJECT_ROOT%\CarlaUE4.exe"
+set "CARLA_EXE=%PROJECT_ROOT%\hutb\CarlaUE4.exe"
 
 REM Set main_ai.py path
 set "MAIN_AI_PY=%PROJECT_ROOT%\llm\main_ai.py"
@@ -61,6 +102,14 @@ REM Print Python version
 echo Virtual environment activated successfully!
 echo Python version:
 %PYTHON_EXE% --version
+
+echo Install hutb package:
+REM 需要关闭代理，解决安装 whl 时的代理问题: WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ProxyError('Cannot connect to proxy.', ConnectionResetError(10054, '远程主机强迫关闭了一个现有的连接。', None, 10054, None))': /simple/msgpack-rpc-python/
+REM 制作 Python 环境步骤：
+REM dependencies/prerequisites/miniconda3/envs/hutb_3.10/python.exe -m pip install hutb\PythonAPI\carla\dist\hutb-2.9.16-cp310-cp310-win_amd64.whl
+REM dependencies/prerequisites/miniconda3/envs/hutb_3.10/python.exe -m pip install fastapi uvicorn aiohttp fastmcp loguru
+echo pip list:
+%PYTHON_EXE% -m pip list
 
 REM Set environment variables
 set "PATH=%VENV_PATH%\Scripts;%VENV_PATH%;%PATH%"

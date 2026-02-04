@@ -30,7 +30,7 @@ graph LR
 * NVIDIA RTX 3070+
 * Windows 10/11
 
-下载 [HUTB项目](https://pan.baidu.com/s/1TNH-9wZYNy4NhmWJSoZL5A?pwd=hutb)中的`hutb_v1.0.zip`文件，解压到`WindowsNoEditor`文件夹下，双击 `hutb.bat` 启动模拟器（能够在未安装Python和UE4的情况下启动）。
+双击 `hutb.bat` 启动模拟器（第一次启动会下载相关依赖，需要等待一段时间）。
 
 
 
