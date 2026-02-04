@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-FastMCP GitHub Assistant - 使用FastMCP框架的智能GitHub助手
-集成Deepseek AI模型，支持自然语言查询GitHub仓库
-使用FastMCP装饰器方式实现MCP工具调用机制
+FastMCP HUTB Assistant - 使用FastMCP框架的模拟器接口
+集成Deepseek AI模型，支持自然语言使用 HUTB 模拟器
+使用 FastMCP 装饰器方式实现 MCP 工具调用机制
 """
 
 import sys
@@ -156,7 +156,7 @@ class CarlaClient:
         app_logger.info("🧹 清理所有CARLA actor")
 
 
-# 全局CARLA客户端实例
+# 全局客户端实例
 carla_client = CarlaClient()
 
 async def connect_carla_impl(host: str = 'localhost', port: int = 2000) -> str:
@@ -1043,14 +1043,14 @@ def get_web_interface():
     <body>
         <div class="container">
             <div class="header">
-                <h1>🚀 人形机器人智能助手</h1>
+                <h1>🚀 HUTB 模拟器智能助手</h1>
             </div>
 
             <div class="chat-container">
                 <div class="messages" id="messages">
                     <div class="example-questions">
                         <div class="welcome-message">
-                            👋 欢迎使用基于FastMCP框架的人形机器人智能助手！集成GitHub搜索 + CARLA仿真控制。
+                            👋 欢迎使用基于FastMCP框架的 HUTB 模拟器智能助手！集成 HUTB 仿真控制。
                             <br><br>
                             🔧 <strong>技术特色</strong>：本助手使用FastMCP装饰器实现工具定义，提供类型安全、自动化的MCP体验！
                         </div>
@@ -1061,6 +1061,12 @@ def get_web_interface():
                             </div>
                             <div class="example-item" onclick="askExample('设置雨天天气条件')">
                                 🌫️ 天气设置（默认雨天）
+                            </div>
+                            <div class="example-item" onclick="askExample('生成行人')">
+                                🚶 生成行人
+                            </div>
+                            <div class="example-item" onclick="askExample('生成 model3 车辆')">
+                                🚗 生成车辆
                             </div>
                         </div>
                     </div>
@@ -1079,7 +1085,7 @@ def get_web_interface():
                     <textarea 
                         id="messageInput" 
                         class="message-input" 
-                        placeholder="问我任何人形机器人相关问题，我会使用FastMCP工具来帮你搜索..."
+                        placeholder="问我任何 HUTB 模拟器相关问题，我会使用 FastMCP 工具来帮你操作..."
                         rows="2"
                         onkeydown="handleKeyPress(event)"
                     ></textarea>
@@ -1290,7 +1296,7 @@ def main():
         print("[INFO] 基于FastMCP框架 + Deepseek AI智能对话")
         print()
 
-        uvicorn.run(app, host="localhost", port=3000)
+        uvicorn.run(app='main_ai:app', host="localhost", port=3000, reload=True)
 
 
 if __name__ == "__main__":

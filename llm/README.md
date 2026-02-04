@@ -77,7 +77,6 @@ if __name__ == "__main__":
 ```
 ai-github-assistant/
 ├── main_ai.py                    # 🤖 AI对话界面（FastMCP + Deepseek AI）
-├── main_search.py                # 🔍 Web搜索界面（简洁版）
 ├── src/
 │   ├── server.py                 # 🚀 FastMCP服务器
 │   ├── github_client.py          # 📡 GitHub API客户端

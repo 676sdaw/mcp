@@ -18,7 +18,7 @@ class Config:
     GITHUB_BASE_URL: str = os.getenv("GITHUB_BASE_URL", "https://api.github.com")
     
     # Deepseek AI配置
-    DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
+    DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "sk-ee98515f3b6f4f89af52ec6d5e0ec19f")
     DEEPSEEK_API_URL: str = os.getenv("DEEPSEEK_API_URL", "https://api.deepseek.com/chat/completions")
     
     # MCP服务器配置
