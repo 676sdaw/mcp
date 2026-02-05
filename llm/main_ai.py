@@ -5,6 +5,7 @@ FastMCP HUTB Assistant - 使用FastMCP框架的模拟器接口
 使用 FastMCP 装饰器方式实现 MCP 工具调用机制
 """
 
+import socket
 import sys
 import json
 import re
@@ -1292,11 +1293,14 @@ def main():
         print("   - @mcp.tool() get_repository_details")
         print("   - @mcp.tool() search_github_users")
         print("   - @mcp.tool() get_trending_repositories")
-        print("[URL] 访问地址: http://localhost:3000")
         print("[INFO] 基于FastMCP框架 + Deepseek AI智能对话")
         print()
 
-        uvicorn.run(app='main_ai:app', host="localhost", port=3000, reload=True)
+        # 指定 0.0.0.0 无效
+        # 获取本地机器的ip地址
+        host_ip = socket.gethostbyname(socket.gethostname())
+        print(f"[INFO] 访问地址: http://{host_ip}:3000")
+        uvicorn.run(app='main_ai:app', host=host_ip, port=3000, reload=True)
 
 
 if __name__ == "__main__":

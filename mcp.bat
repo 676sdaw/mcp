@@ -11,6 +11,24 @@ REM Set virtual environment and Python paths
 set "VENV_PATH=%PROJECT_ROOT%\dependencies\prerequisites\miniconda3\envs\hutb_3.10"
 set "PYTHON_EXE=%VENV_PATH%\python.exe"
 
+REM Set CarlaUE4.exe path
+set "CARLA_EXE=%PROJECT_ROOT%\hutb\CarlaUE4.exe"
+
+REM Set main_ai.py path
+set "MAIN_AI_PY=%PROJECT_ROOT%\llm\main_ai.py"
+
+REM Define port and URL to check
+for /f "tokens=16" %%i in ('ipconfig ^|find /i "ipv4"') do set host_ip=%%i
+echo IP:%host_ip%
+set "PORT=3000"
+set "CHECK_URL=http://%host_ip%:%PORT%"
+
+REM Maximum wait time in seconds for main_ai.py to start
+set "MAX_WAIT=60"
+
+REM Wait time after starting CarlaUE4.exe
+set "POST_CARLA_WAIT=3"
+
 if not exist "%PROJECT_ROOT%\hutb_downloader.exe" (
     curl -L -o "hutb_downloader.exe" "https://gitee.com/OpenHUTB/sw/releases/download/up/hutb_downloader.exe"
 ) else (
@@ -38,6 +56,15 @@ if not exist "%PROJECT_ROOT%\hutb" (
     echo Download and extraction completed.
 ) else (
     echo hutb repository already exists.
+    REM Check if CarlaUE4.exe exists
+    if not exist "%CARLA_EXE%" (
+        echo Warning: CarlaUE4.exe not found, skipping startup
+        echo CarlaUE4.exe path: %CARLA_EXE%
+    )
+    start "CarlaUE4" "%CARLA_EXE%"
+    
+    REM Wait for specified time after starting CarlaUE4
+    timeout /t %POST_CARLA_WAIT% /nobreak >nul
 )
 
 REM 为了解压miniconda3
@@ -55,22 +82,6 @@ if not exist "dependencies\prerequisites\miniconda3\" (
 )
 
 
-REM Set CarlaUE4.exe path
-set "CARLA_EXE=%PROJECT_ROOT%\hutb\CarlaUE4.exe"
-
-REM Set main_ai.py path
-set "MAIN_AI_PY=%PROJECT_ROOT%\llm\main_ai.py"
-
-REM Define port and URL to check
-set "PORT=3000"
-set "CHECK_URL=http://localhost:%PORT%"
-
-REM Maximum wait time in seconds for main_ai.py to start
-set "MAX_WAIT=60"
-
-REM Wait time after starting CarlaUE4.exe
-set "POST_CARLA_WAIT=3"
-
 REM Check if virtual environment exists
 if not exist "%VENV_PATH%" (
     echo Error: Virtual environment not found at %VENV_PATH%
@@ -83,12 +94,6 @@ if not exist "%PYTHON_EXE%" (
     echo Error: Python interpreter not found at %PYTHON_EXE%
     pause
     exit /b 1
-)
-
-REM Check if CarlaUE4.exe exists
-if not exist "%CARLA_EXE%" (
-    echo Warning: CarlaUE4.exe not found, skipping startup
-    echo CarlaUE4.exe path: %CARLA_EXE%
 )
 
 REM Check if main_ai.py exists
@@ -160,11 +165,7 @@ goto :WAIT_LOOP
 :START_CARLA
 REM 2. Then, start CarlaUE4.exe asynchronously
 if exist "%CARLA_EXE%" (
-    echo Starting CarlaUE4.exe...
-    start "CarlaUE4" "%CARLA_EXE%"
-    
-    REM Wait for specified time after starting CarlaUE4
-    timeout /t %POST_CARLA_WAIT% /nobreak >nul
+    echo Existing CarlaUE4.exe...
 )
 
 REM 3. Finally, open browser to localhost:3000
