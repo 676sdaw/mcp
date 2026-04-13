@@ -346,7 +346,17 @@ class CarlaClient:
                 cloudiness=80, precipitation=0, precipitation_deposits=0,
                 wind_intensity=5, sun_azimuth_angle=0, sun_altitude_angle=30,
                 fog_density=90, fog_distance=50, wetness=20
-            )
+            ),
+            'snow': carla.WeatherParameters(
+                cloudiness=80, precipitation=60, precipitation_deposits=80,
+                wind_intensity=20, sun_azimuth_angle=0, sun_altitude_angle=10,
+                fog_density=20, fog_distance=200, wetness=30
+            ),
+            'night': carla.WeatherParameters(
+                cloudiness=20, precipitation=0, precipitation_deposits=0,
+                wind_intensity=5, sun_azimuth_angle=0, sun_altitude_angle=-90,
+                fog_density=0, fog_distance=0, wetness=0
+            ),
         }
         if weather_type in weather_presets:
             self.world.set_weather(weather_presets[weather_type])
@@ -1436,15 +1446,15 @@ async def spawn_vehicle_impl(query: str, count: int = 1, **kwargs) -> str:
     return "❌ 车辆生成失败，请确保CARLA服务器已连接且地图有可用生成点"
 
 
-async def set_weather_impl(owner: str, repo: str) -> str:
+async def set_weather_impl(weather_type: str) -> str:
     """（实际功能：设置天气）"""
     # 检查是否已连接到CARLA服务器
     if carla_client.world is None:
         return "❌ 未连接到CARLA服务器，请先使用'连接CARLA服务器'命令进行连接"
     
-    weather_types = {'clear': '晴天', 'rain': '雨天', 'fog': '雾天'}
-    success = await carla_client.set_weather(repo.lower())
-    return f"✅ 天气已设置为 {weather_types.get(repo.lower(), repo)}" if success else "❌ 不支持的天气类型"
+    weather_presets = {'clear': '晴天', 'rain': '雨天', 'fog': '雾天', 'snow': '雪天', 'night': '夜晚'}
+    success = await carla_client.set_weather(weather_type.lower())
+    return f"✅ 天气已设置为 {weather_presets.get(weather_type.lower(), weather_type)}" if success else "❌ 不支持的天气类型"
 
 
 async def get_traffic_lights_impl(query: str, **kwargs) -> str:
@@ -1560,9 +1570,14 @@ async def spawn_vehicle(query: str, count: int = 1) -> str:
 
 
 @mcp.tool()
-async def set_weather(owner: str, repo: str) -> str:
-    """（实际功能：设置天气）"""
-    return await set_weather_impl(owner, repo)
+async def set_weather(weather_type: str) -> str:
+    """设置仿真天气环境。weather_type 支持:
+        clear(晴天),
+        rain(雨天),
+        fog(雾天),
+        snow(雪天),
+        night(夜晚/弱光)"""
+    return await set_weather_impl(weather_type)
 
 
 @mcp.tool()
@@ -1660,10 +1675,9 @@ class FastMCPGitHubAssistant:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "owner": {"type": "string", "description": "固定值weather"},
-                            "repo": {"type": "string", "enum": ["clear", "rain", "fog"]}
+                            "weather_type": {"type": "string", "enum": ["clear", "rain", "fog", "snow", "night"]}
                         },
-                        "required": ["owner", "repo"]
+                        "required": ["weather_type"]
                     }
                 }
             },
@@ -1858,14 +1872,12 @@ class FastMCPGitHubAssistant:
 
             elif function_name == "set_weather":
                 result = await set_weather_impl(
-                    owner=arguments["owner"],
-                    repo=arguments["repo"]
+                    weather_type=arguments.get("weather_type", "clear")
                 )
                 return {
                     "success": True,
                     "data": result
                 }
-
             elif function_name == "get_traffic_lights":
                 result = await get_traffic_lights_impl(
                     query=arguments["query"],
@@ -3196,60 +3208,34 @@ assistant = FastMCPGitHubAssistant()
 
 
 def main():
-    """主函数 - 可以选择启动Web界面或MCP服务器"""
+    """主函数 - 支持 Web界面、标准MCP、SSE-MCP 三种启动模式"""
     import sys
+    import socket
 
+    # 1. 提取公共逻辑：无论进入哪个模式，都先进行一次环境校验
+    if not config.validate():
+        print("[ERROR] 配置验证失败，请检查环境变量设置")
+        print("[INFO] 请确保 .env 文件包含以下必要配置：")
+        print("   - GITHUB_TOKEN=your_github_token")
+        print("   - DEEPSEEK_API_KEY=your_deepseek_api_key")
+        return
+    print("[OK] 环境配置验证通过")
+
+    # 2. 根据命令行参数进行路由分发
     if len(sys.argv) > 1 and sys.argv[1] == "mcp":
-        # 启动MCP服务器模式
-        print("[MCP] 启动FastMCP AI助手MCP服务器...")
-
-        # 验证配置
-        if not config.validate():
-            print("[ERROR] 配置验证失败")
-            print("[INFO] 请确保环境变量包含:")
-            print("[INFO] 请确保 .env 文件包含以下必要配置：")
-            print("   - GITHUB_TOKEN=your_github_token")
-            print("   - DEEPSEEK_API_KEY=your_deepseek_api_key")
-            return
-
-        print("[OK] 配置验证通过")
-        print("[TOOLS] 已注册MCP工具:")
-        print("   - search_github_repositories")
-        print("   - get_repository_details")
-        print("   - search_github_users")
-        print("   - get_trending_repositories")
-        print("[READY] 等待AI连接...")
-
-        # 启动FastMCP服务器
+        print("[MCP] 启动 FastMCP AI助手 MCP/stdio 服务器...")
         mcp.run()
+
+    elif len(sys.argv) > 1 and sys.argv[1] == "sse":
+        print("[MCP] 启动 FastMCP AI助手 SSE 服务端 (OpenClaw专用)...")
+        # 监听 0.0.0.0 允许 Docker 跨环境访问，使用 3001 端口与 Web 端物理隔离
+        mcp.run(transport="sse", host="0.0.0.0", port=3001)
+
     else:
-        # 默认启动Web AI对话界面
-        print("[WEB] 启动FastMCP AI助手对话界面...")
-        print("[AI] 集成Deepseek AI + FastMCP工具")
-
-        # 验证配置
-        if not config.validate():
-            print("[ERROR] 配置验证失败，请检查环境变量设置")
-            print("[INFO] 请确保 .env 文件包含以下必要配置：")
-            print("   - GITHUB_TOKEN=your_github_token")
-            print("   - DEEPSEEK_API_KEY=your_deepseek_api_key")
-            return
-
-        print("[OK] 配置验证通过")
-        print("[TOOLS] FastMCP工具已注册:")
-        print("   - @mcp.tool() search_github_repositories")
-        print("   - @mcp.tool() get_repository_details")
-        print("   - @mcp.tool() search_github_users")
-        print("   - @mcp.tool() get_trending_repositories")
-        print("[INFO] 基于FastMCP框架 + Deepseek AI智能对话")
-        print()
-
-        # 指定 0.0.0.0 无效
-        # 获取本地机器的ip地址
+        print("[WEB] 启动 FastMCP AI助手 Web 对话界面...")
         host_ip = socket.gethostbyname(socket.gethostname())
         print(f"[INFO] 访问地址: http://{host_ip}:3000")
         uvicorn.run(app='main_ai:app', host=host_ip, port=3000, reload=True)
-
 
 if __name__ == "__main__":
     main()
